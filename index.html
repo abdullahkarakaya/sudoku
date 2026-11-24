@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>Sudoku</title>
+<meta name="description" content="Reklamsız, internetsiz çalışan sudoku" />
+<meta name="theme-color" content="#1f4e79" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" type="image/png" href="./icons/favicon.png" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Sudoku" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<style>
+:root {
+  --bg: #f4f1ea; --panel: #ffffff; --text: #1d232b; --muted: #6b7380;
+  --line: #c9ced6; --thick: #2b3440; --accent: #1f6fb8; --accent-soft: #d9e8f7;
+  --same: #bcd6f0; --peer: #eaf0f6; --given: #1d232b; --user: #1f6fb8;
+  --err: #c62f2f; --err-bg: #f8dada; --btn: #e7e9ee; --ok: #2e7d4f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c; --panel: #1d2128; --text: #e7eaee; --muted: #8b93a0;
+    --line: #39404b; --thick: #a8b0bc; --accent: #5aa5ec; --accent-soft: #23384e;
+    --same: #2c4a68; --peer: #232a33; --given: #e7eaee; --user: #6fb3f2;
+    --err: #ff6b6b; --err-bg: #4a2326; --btn: #2a3039; --ok: #5cc58a;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  user-select: none; -webkit-user-select: none; overscroll-behavior: none;
+}
+.app { max-width: 520px; margin: 0 auto; padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: .5px; }
+.stats { display: flex; gap: 14px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--text); }
+.err-count b { color: var(--err); }
+select, button { font: inherit; color: var(--text); }
+select { background: var(--btn); border: 0; border-radius: 8px; padding: 6px 8px; }
+.board {
+  display: grid; grid-template-columns: repeat(9, 1fr); width: 100%; aspect-ratio: 1;
+  border: 2.5px solid var(--thick); border-radius: 6px; overflow: hidden; background: var(--panel);
+}
+.cell {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  font-size: min(7.4vw, 36px); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.cell:nth-child(9n) { border-right: 0; }
+.cell:nth-child(9n+3), .cell:nth-child(9n+6) { border-right: 2.5px solid var(--thick); }
+.cell:nth-child(n+19):nth-child(-n+27), .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2.5px solid var(--thick); }
+.cell:nth-child(n+73) { border-bottom: 0; }
+.cell.given { color: var(--given); font-weight: 600; }
+.cell.user { color: var(--user); }
+.cell.peer { background: var(--peer); }
+.cell.same { background: var(--same); }
+.cell.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.cell.wrong { color: var(--err); background: var(--err-bg); }
+.notes { position: absolute; inset: 2px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.notes span { font-size: min(2.6vw, 12.5px); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.notes span.hl { color: var(--accent); font-weight: 700; }
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tool { background: var(--btn); border: 0; border-radius: 12px; padding: 8px 4px; font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+.tool .ic { font-size: 20px; line-height: 1; }
+.tool.on { background: var(--accent); color: #fff; }
+.tool:disabled { opacity: .4; }
+.pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+.num { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 0 4px; font-size: min(7vw, 30px); color: var(--accent); cursor: pointer; display: flex; flex-direction: column; align-items: center; }
+.num small { font-size: 10px; color: var(--muted); }
+.num.done { visibility: hidden; }
+.bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+.btn { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
+.btn.ghost { background: var(--btn); color: var(--text); font-weight: 500; }
+.install { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.install button { flex-shrink: 0; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.modal.open { display: flex; }
+.card { background: var(--panel); border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; text-align: center; }
+.card h2 { margin: 0 0 6px; }
+.card p { color: var(--muted); margin: 6px 0 14px; }
+.card table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
+.card td, .card th { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.card .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.paused .board .cell { color: transparent !important; }
+.paused .board .notes { visibility: hidden; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <h1>Sudoku</h1>
+    <div class="stats">
+      <span id="level"></span>
+      <span class="err-count">Hata <b id="errs">0</b></span>
+      <span><b id="time">00:00</b></span>
+    </div>
+  </header>
+
+  <div class="board" id="board"></div>
+
+  <div class="tools">
+    <button class="tool" id="undo"><span class="ic">↶</span>Geri al</button>
+    <button class="tool" id="erase"><span class="ic">⌫</span>Sil</button>
+    <button class="tool" id="notesBtn"><span class="ic">✎</span>Not</button>
+    <button class="tool" id="hint"><span class="ic">💡</span>İpucu</button>
+  </div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="bar">
+    <button class="btn" id="newBtn">Yeni oyun</button>
+    <button class="btn ghost" id="pauseBtn">Duraklat</button>
+    <button class="btn ghost" id="statsBtn">İstatistik</button>
+  </div>
+
+  <div id="installBox"></div>
+</div>
+
+<div class="modal" id="newModal">
+  <div class="card">
+    <h2>Yeni oyun</h2>
+    <p>Zorluk seç</p>
+    <div class="row" id="levels"></div>
+    <div class="row" style="margin-top:14px"><button class="btn ghost" data-close>Vazgeç</button></div>
+  </div>
+</div>
+
+<div class="modal" id="winModal">
+  <div class="card">
+    <h2>Tebrikler! 🎉</h2>
+    <p id="winText"></p>
+    <div class="row"><button class="btn" id="winNew">Yeni oyun</button></div>
+  </div>
+</div>
+
+<div class="modal" id="statsModal">
+  <div class="card">
+    <h2>İstatistik</h2>
+    <table id="statsTable"></table>
+    <div class="row"><button class="btn ghost" data-close>Kapat</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ---------- Bulmaca üretici ----------
+const LEVELS = [
+  { id: "kolay", name: "Kolay", clues: 40 },
+  { id: "orta", name: "Orta", clues: 33 },
+  { id: "zor", name: "Zor", clues: 28 },
+  { id: "uzman", name: "Uzman", clues: 24 },
+];
+const ROW = i => (i / 9) | 0, COL = i => i % 9, BOX = i => ((ROW(i) / 3) | 0) * 3 + ((COL(i) / 3) | 0);
+const PEERS = Array.from({ length: 81 }, (_, i) => {
+  const s = new Set();
+  for (let j = 0; j < 81; j++) if (j !== i && (ROW(j) === ROW(i) || COL(j) === COL(i) || BOX(j) === BOX(i))) s.add(j);
+  return [...s];
+});
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// grid: 81 sayılık dizi (0 = boş). limit kadar çözüm bulunca durur.
+function countSolutions(grid, limit) {
+  const g = grid.slice();
+  const rows = new Array(9).fill(0), cols = new Array(9).fill(0), boxes = new Array(9).fill(0);
+  for (let i = 0; i < 81; i++) if (g[i]) { const b = 1 << g[i]; rows[ROW(i)] |= b; cols[COL(i)] |= b; boxes[BOX(i)] |= b; }
+  let count = 0;
+  (function solve() {
+    if (count >= limit) return;
+    let best = -1, bestMask = 0, bestN = 10;
+    for (let i = 0; i < 81; i++) {
+      if (g[i]) continue;
+      const m = ~(rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]) & 0x3FE;
+      let n = 0; for (let x = m; x; x &= x - 1) n++;
+      if (n < bestN) { best = i; bestMask = m; bestN = n; if (n <= 1) break; }
+    }
+    if (best < 0) { count++; return; }
+    if (bestN === 0) return;
+    const r = ROW(best), c = COL(best), bx = BOX(best);
+    for (let v = 1; v <= 9; v++) {
+      if (!(bestMask & (1 << v))) continue;
+      const b = 1 << v;
+      g[best] = v; rows[r] |= b; cols[c] |= b; boxes[bx] |= b;
+      solve();
+      g[best] = 0; rows[r] &= ~b; cols[c] &= ~b; boxes[bx] &= ~b;
+      if (count >= limit) return;
+    }
+  })();
+  return count;
+}
+
+function fullGrid() {
+  const g = new Array(81).fill(0);
+  (function fill(i) {
+    if (i === 81) return true;
+    for (const v of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+      if (PEERS[i].some(p => g[p] === v)) continue;
+      g[i] = v;
+      if (fill(i + 1)) return true;
+    }
+    g[i] = 0; return false;
+  })(0);
+  return g;
+}
+
+function generate(clues) {
+  const solution = fullGrid();
+  const puzzle = solution.slice();
+  let filled = 81;
+  for (const i of shuffle([...Array(81).keys()])) {
+    if (filled <= clues) break;
+    const keep = puzzle[i];
+    puzzle[i] = 0;
+    if (countSolutions(puzzle, 2) !== 1) puzzle[i] = keep; else filled--;
+  }
+  return { puzzle, solution };
+}
+
+// ---------- Durum ----------
+const KEY = "sudoku:oyun", STATS = "sudoku:istatistik";
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+let S = null;          // oyun durumu
+let sel = -1, notesMode = false, paused = false;
+
+function newGame(levelId) {
+  const lv = LEVELS.find(l => l.id === levelId) || LEVELS[0];
+  const { puzzle, solution } = generate(lv.clues);
+  S = { level: lv.id, puzzle, solution, values: puzzle.slice(), notes: Array.from({ length: 81 }, () => []),
+        errors: 0, seconds: 0, history: [], done: false, hints: 0 };
+  sel = -1; paused = false;
+  persist(); render();
+}
+function persist() { save(KEY, S); }
+
+// ---------- Hamleler ----------
+function snapshot(i) { S.history.push({ i, v: S.values[i], n: S.notes[i].slice() }); if (S.history.length > 300) S.history.shift(); }
+
+function input(v) {
+  if (sel < 0 || S.done || paused || S.puzzle[sel]) return;
+  if (notesMode) {
+    if (S.values[sel]) return;
+    snapshot(sel);
+    const n = S.notes[sel], k = n.indexOf(v);
+    k >= 0 ? n.splice(k, 1) : n.push(v);
+  } else {
+    if (S.values[sel] === v) return;
+    snapshot(sel);
+    S.values[sel] = v; S.notes[sel] = [];
+    if (v !== S.solution[sel]) S.errors++;
+    else for (const p of PEERS[sel]) { const k = S.notes[p].indexOf(v); if (k >= 0) S.notes[p].splice(k, 1); }
+    checkWin();
+  }
+  persist(); render();
+}
+function erase() {
+  if (sel < 0 || S.done || paused || S.puzzle[sel]) return;
+  if (!S.values[sel] && !S.notes[sel].length) return;
+  snapshot(sel); S.values[sel] = 0; S.notes[sel] = []; persist(); render();
+}
+function undo() {
+  if (S.done || paused) return;
+  const h = S.history.pop(); if (!h) return;
+  S.values[h.i] = h.v; S.notes[h.i] = h.n; sel = h.i; persist(); render();
+}
+function hint() {
+  if (S.done || paused) return;
+  let i = sel;
+  if (i < 0 || S.values[i] === S.solution[i]) {
+    const empty = [...Array(81).keys()].filter(j => S.values[j] !== S.solution[j]);
+    if (!empty.length) return;
+    i = empty[(Math.random() * empty.length) | 0];
+  }
+  snapshot(i); S.values[i] = S.solution[i]; S.notes[i] = []; S.hints++; sel = i;
+  for (const p of PEERS[i]) { const k = S.notes[p].indexOf(S.solution[i]); if (k >= 0) S.notes[p].splice(k, 1); }
+  checkWin(); persist(); render();
+}
+function checkWin() {
+  if (!S.values.every((v, i) => v === S.solution[i])) return;
+  S.done = true;
+  const st = load(STATS, {});
+  const s = st[S.level] || { won: 0, best: null, total: 0 };
+  s.won++; s.total += S.seconds;
+  const clean = S.hints === 0;
+  if (clean && (s.best === null || S.seconds < s.best)) s.best = S.seconds;
+  st[S.level] = s; save(STATS, st);
+  const lvName = LEVELS.find(l => l.id === S.level).name;
+  $("winText").textContent = `${lvName} bulmacayı ${fmt(S.seconds)} sürede bitirdin. Hata: ${S.errors}` +
+    (S.hints ? `, ipucu: ${S.hints}` : "") + (clean && s.best === S.seconds ? " · Yeni rekor!" : "");
+  setTimeout(() => open("winModal"), 350);
+}
+
+// ---------- Çizim ----------
+const $ = id => document.getElementById(id);
+const fmt = s => (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s / 60) % 60).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+const board = $("board"), pad = $("pad");
+const cells = Array.from({ length: 81 }, (_, i) => {
+  const d = document.createElement("div"); d.className = "cell";
+  d.addEventListener("pointerdown", e => { e.preventDefault(); sel = i; render(); });
+  board.appendChild(d); return d;
+});
+const nums = Array.from({ length: 9 }, (_, k) => {
+  const b = document.createElement("button"); b.className = "num";
+  b.innerHTML = `${k + 1}<small></small>`;
+  b.addEventListener("click", () => input(k + 1));
+  pad.appendChild(b); return b;
+});
+
+function render() {
+  document.body.classList.toggle("paused", paused);
+  const selV = sel >= 0 ? S.values[sel] : 0;
+  for (let i = 0; i < 81; i++) {
+    const v = S.values[i], c = cells[i];
+    const wrong = v && v !== S.solution[i];
+    let cls = "cell";
+    if (S.puzzle[i]) cls += " given"; else if (v) cls += " user";
+    if (sel >= 0) {
+      if (i === sel) cls += " sel";
+      else if (selV && v === selV) cls += " same";
+      else if (PEERS[sel].includes(i)) cls += " peer";
+    }
+    if (wrong) cls += " wrong";
+    c.className = cls;
+    if (v) c.textContent = v;
+    else if (S.notes[i].length) {
+      c.innerHTML = '<div class="notes">' + [1,2,3,4,5,6,7,8,9].map(n =>
+        `<span class="${n === selV ? "hl" : ""}">${S.notes[i].includes(n) ? n : ""}</span>`).join("") + "</div>";
+    } else c.textContent = "";
+  }
+  const counts = new Array(10).fill(0);
+  S.values.forEach((v, i) => { if (v && v === S.solution[i]) counts[v]++; });
+  nums.forEach((b, k) => { b.classList.toggle("done", counts[k + 1] >= 9); b.querySelector("small").textContent = 9 - counts[k + 1]; });
+  $("notesBtn").classList.toggle("on", notesMode);
+  $("undo").disabled = !S.history.length;
+  $("errs").textContent = S.errors;
+  $("time").textContent = fmt(S.seconds);
+  $("level").textContent = LEVELS.find(l => l.id === S.level).name;
+  $("pauseBtn").textContent = paused ? "Devam et" : "Duraklat";
+}
+
+// ---------- Pencereler ----------
+function open(id) { $(id).classList.add("open"); }
+function close(id) { $(id).classList.remove("open"); }
+document.querySelectorAll(".modal").forEach(m => m.addEventListener("click", e => {
+  if (e.target === m || e.target.hasAttribute("data-close")) m.classList.remove("open");
+}));
+LEVELS.forEach(l => {
+  const b = document.createElement("button"); b.className = "btn"; b.textContent = l.name;
+  b.addEventListener("click", () => { close("newModal"); b.blur(); setTimeout(() => newGame(l.id), 20); });
+  $("levels").appendChild(b);
+});
+$("newBtn").onclick = () => open("newModal");
+$("winNew").onclick = () => { close("winModal"); open("newModal"); };
+$("undo").onclick = undo;
+$("erase").onclick = erase;
+$("hint").onclick = hint;
+$("notesBtn").onclick = () => { notesMode = !notesMode; render(); };
+$("pauseBtn").onclick = () => { if (!S.done) { paused = !paused; render(); } };
+$("statsBtn").onclick = () => {
+  const st = load(STATS, {});
+  $("statsTable").innerHTML = "<tr><th>Zorluk</th><th>Biten</th><th>Rekor</th><th>Ortalama</th></tr>" +
+    LEVELS.map(l => { const s = st[l.id]; return `<tr><td>${l.name}</td><td>${s ? s.won : 0}</td><td>${s && s.best !== null ? fmt(s.best) : "–"}</td><td>${s && s.won ? fmt(Math.round(s.total / s.won)) : "–"}</td></tr>`; }).join("");
+  open("statsModal");
+};
+
+// Klavye (bilgisayarda)
+document.addEventListener("keydown", e => {
+  if (e.key >= "1" && e.key <= "9") input(+e.key);
+  else if (e.key === "Backspace" || e.key === "Delete" || e.key === "0") erase();
+  else if (e.key === "n" || e.key === "N") { notesMode = !notesMode; render(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key === "z") undo();
+  else if (e.key.startsWith("Arrow")) {
+    if (sel < 0) sel = 0;
+    const r = ROW(sel), c = COL(sel);
+    sel = { ArrowUp: ((r + 8) % 9) * 9 + c, ArrowDown: ((r + 1) % 9) * 9 + c, ArrowLeft: r * 9 + (c + 8) % 9, ArrowRight: r * 9 + (c + 1) % 9 }[e.key];
+    e.preventDefault(); render();
+  }
+});
+
+// Süre: sadece ekran açıkken ve oyun sürerken işler
+setInterval(() => {
+  if (!S || S.done || paused || document.hidden) return;
+  S.seconds++; $("time").textContent = fmt(S.seconds);
+  if (S.seconds % 5 === 0) persist();
+}, 1000);
+document.addEventListener("visibilitychange", () => { if (document.hidden && S) persist(); });
+
+// ---------- Kurulum butonu ----------
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let bip = null;
+function renderInstall() {
+  const box = $("installBox");
+  if (standalone()) { box.innerHTML = ""; return; }
+  if (bip) {
+    box.innerHTML = '<div class="install"><span>Telefona uygulama olarak kur: internetsiz çalışır, ana ekranda simgesi olur.</span><button class="btn" id="instBtn">Yükle</button></div>';
+    $("instBtn").onclick = async () => { await bip.prompt(); await bip.userChoice; bip = null; renderInstall(); };
+  } else if (isIOS()) {
+    box.innerHTML = '<div class="install"><span>iPhone\'a kur: Safari\'de <b>Paylaş</b> düğmesine (kare ve yukarı ok) dokun, sonra <b>Ana Ekrana Ekle</b>\'yi seç.</span></div>';
+  } else box.innerHTML = "";
+}
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); bip = e; renderInstall(); });
+addEventListener("appinstalled", () => { bip = null; renderInstall(); });
+renderInstall();
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("./sw.js");
+
+// ---------- Başlat ----------
+S = load(KEY, null);
+if (!S || !S.solution) newGame("kolay"); else render();
+</script>
+</body>
+</html>
