@@ -19,6 +19,7 @@
   --line: #c9ced6; --thick: #2b3440; --accent: #1f6fb8; --accent-soft: #d9e8f7;
   --same: #bcd6f0; --peer: #eaf0f6; --given: #1d232b; --user: #1f6fb8;
   --err: #c62f2f; --err-bg: #f8dada; --btn: #e7e9ee; --ok: #2e7d4f;
+  --glow: #fff1a8; --glow-edge: #f2c230;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,6 +27,7 @@
     --line: #39404b; --thick: #a8b0bc; --accent: #5aa5ec; --accent-soft: #23384e;
     --same: #2c4a68; --peer: #232a33; --given: #e7eaee; --user: #6fb3f2;
     --err: #ff6b6b; --err-bg: #4a2326; --btn: #2a3039; --ok: #5cc58a;
+    --glow: #5b4b14; --glow-edge: #e0b52c;
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -61,6 +63,12 @@ select { background: var(--btn); border: 0; border-radius: 8px; padding: 6px 8px
 .cell.same { background: var(--same); }
 .cell.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
 .cell.wrong { color: var(--err); background: var(--err-bg); }
+/* Tamamlanan satır/sütun/kutu kısa bir süre parlar, sonra normal rengine döner */
+.cell.glow { animation: glow 1s ease-out both; }
+@keyframes glow {
+  35% { background: var(--glow); box-shadow: inset 0 0 0 2px var(--glow-edge); }
+  100% { box-shadow: none; }
+}
 .notes { position: absolute; inset: 2px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
 .notes span { font-size: min(2.6vw, 12.5px); color: var(--muted); display: flex; align-items: center; justify-content: center; }
 .notes span.hl { color: var(--accent); font-weight: 700; }
@@ -291,7 +299,7 @@ function newGame(levelId) {
   const { puzzle, solution } = generate(lv);
   S = { level: lv.id, puzzle, solution, values: puzzle.slice(), notes: Array.from({ length: 81 }, () => []),
         errors: 0, seconds: 0, history: [], done: false, hints: 0 };
-  sel = -1;
+  sel = -1; glow = new Map();
   persist(); render();
 }
 function persist() { save(KEY, S); }
@@ -311,7 +319,10 @@ function input(v) {
     snapshot(sel);
     S.values[sel] = v; S.notes[sel] = [];
     if (v !== S.solution[sel]) S.errors++;
-    else for (const p of PEERS[sel]) { const k = S.notes[p].indexOf(v); if (k >= 0) S.notes[p].splice(k, 1); }
+    else {
+      for (const p of PEERS[sel]) { const k = S.notes[p].indexOf(v); if (k >= 0) S.notes[p].splice(k, 1); }
+      celebrate(sel);
+    }
     checkWin();
   }
   persist(); render();
@@ -336,7 +347,20 @@ function hint() {
   }
   snapshot(i); S.values[i] = S.solution[i]; S.notes[i] = []; S.hints++; sel = i;
   for (const p of PEERS[i]) { const k = S.notes[p].indexOf(S.solution[i]); if (k >= 0) S.notes[p].splice(k, 1); }
-  checkWin(); persist(); render();
+  celebrate(i); checkWin(); persist(); render();
+}
+// i'ye doğru sayı konunca tamamlanan satır, sütun ve kutular parlar (o kareden dalga gibi yayılır)
+let glow = new Map(), glowTimer = 0;
+function celebrate(i) {
+  const full = UNITS.filter(u => u.includes(i) && u.every(c => S.values[c] === S.solution[c]));
+  if (!full.length) return;
+  glow = new Map();
+  for (const u of full) for (const c of u) {
+    const d = (Math.abs(ROW(c) - ROW(i)) + Math.abs(COL(c) - COL(i))) * 0.06;
+    glow.set(c, Math.min(glow.has(c) ? glow.get(c) : 9, d));
+  }
+  clearTimeout(glowTimer);
+  glowTimer = setTimeout(() => { glow = new Map(); render(); }, 1700);
 }
 function checkWin() {
   if (!S.values.every((v, i) => v === S.solution[i])) return;
@@ -381,6 +405,7 @@ function render() {
       else if (PEERS[sel].includes(i)) cls += " peer";
     }
     if (wrong) cls += " wrong";
+    if (glow.has(i)) { cls += " glow"; c.style.animationDelay = glow.get(i) + "s"; } else c.style.animationDelay = "";
     c.className = cls;
     if (v) c.textContent = v;
     else if (S.notes[i].length) {
